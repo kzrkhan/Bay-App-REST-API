@@ -16,9 +16,13 @@ class PostSchema (BaseModel):
     content : str = Field(...)
 
 class UserSchema (BaseModel):
-    fullname : str
     email : EmailStr
     password : str
+    first_name : str
+    last_name : str
+    age : int
+    gender : str
+    helper : bool
 
 class UserLoginSchema (BaseModel):
     email : EmailStr

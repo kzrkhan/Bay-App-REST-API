@@ -9,6 +9,7 @@ from typing import Optional
 from app.models import PostSchema, UserLoginSchema, UserSchema
 from app.auth.auth_handler import sign_JWT
 from app.auth.auth_bearer import JWTBearer
+from supabase import create_client, Client
 
 
 app = FastAPI(
@@ -18,6 +19,12 @@ app = FastAPI(
 )
 
 
+url: str = os.environ.get("DB_URL")
+key: str = os.environ.get("DB_KEY")
+
+supabase: Client = create_client(url, key)
+
+
 posts = [
     {
         "id" : 1,
@@ -25,9 +32,6 @@ posts = [
         "content" : "Lorem Ipsum"
     }
 ]
-
-
-users = []
 
 
 @app.get("/")
@@ -61,7 +65,8 @@ async def add_post(post:PostSchema):
 
 @app.post('/user/signup')
 async def create_user(user : UserSchema):
-    users.append(user)
+    #users.append(user)
+    data = supabase.table("users").insert(user.dict()).execute()
     return sign_JWT(user.email)
 
 
@@ -73,7 +78,16 @@ async def user_login(user : UserLoginSchema):
 
 
 def check_user(data : UserLoginSchema):
-    for user in users:
-        if user.email == data.email and user.password == data.password:
-            return True
-    return False
+    
+    db_users = supabase.table("users").select("*").execute()
+
+    try:
+        users_dict = db_users.dict()
+        for user in users_dict["data"]:
+            if user["email"] == data.email:
+                if user["password"] == data.password:
+                    return True
+        return False
+    
+    except:
+        return False
