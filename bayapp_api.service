@@ -1,0 +1,13 @@
+[Unit]
+Description=Gunicorn instance daemon to serve Bay App API
+After=network.target
+
+[Service]
+User=ubuntu
+Group=nginx
+WorkingDirectory=/home/ubuntu/project
+Environment="PATH=/home/ubuntu/project/env/bin"
+ExecStart=/home/ubuntu/project/env/Bay-App-REST-API/gunicorn api:app -w 4 -k uvicorn.workers.UvicornWorker -b "127.0.0.1:8081"
+
+[Install]
+WanterBy=multi-user.target
