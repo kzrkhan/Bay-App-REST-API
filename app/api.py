@@ -5,7 +5,7 @@ from datetime import date
 import time
 import os
 import shutil
-from fastapi import FastAPI, Depends, Query, Body, UploadFile, File
+from fastapi import FastAPI, Depends, Query, Body, UploadFile, File, Form
 from pydantic import BaseModel
 from typing import Optional
 from app.models import PostSchema, UserLoginSchema, UserSchema
@@ -114,7 +114,6 @@ async def upload_file(file: UploadFile = File(...)):
         shutil.copyfileobj(file.file, buffer)
 
     file_name = file.filename
-    print(file_name)
 
     f_up = open(file_name, 'rb')
     ucare_file: File = uploadcare.upload(f_up)
@@ -126,3 +125,138 @@ async def upload_file(file: UploadFile = File(...)):
         pass
 
     return {"file_url" : str(ucare_file)}
+
+
+@app.post('/report')
+async def issue_report(message: str = Form(...), image: UploadFile = File(...)):
+    
+    with open(f'{image.filename}', 'wb') as buffer:
+        shutil.copyfileobj(image.file, buffer)
+
+    print("File name: ",image.filename)
+    print("Message: ", message)
+
+    return {"response" : "success"}
+
+
+@app.post('/addpoi')
+async def add_poi(name: str = Form(...), description: str = Form(...), logo: UploadFile = File(...), title_image: UploadFile = File(...), rating: int = Form(...), img_1: UploadFile = File(...), img_2: UploadFile = File(...), img_3: UploadFile = File(...), img_4: UploadFile = File(...), img_5: UploadFile = File(...), beach_id: int = Form(...)):
+    
+    with open(f'{logo.filename}', 'wb') as buffer:
+        shutil.copyfileobj(logo.file, buffer)
+
+    file_name = logo.filename
+
+    f_up = open(file_name, 'rb')
+    logo_url: File = uploadcare.upload(f_up)
+    f_up.close()
+
+    try:
+        os.remove(file_name)
+    except:
+        pass
+
+    with open(f'{title_image.filename}', 'wb') as buffer:
+        shutil.copyfileobj(title_image.file, buffer)
+
+    file_name = title_image.filename
+
+    f_up = open(file_name, 'rb')
+    title_image_url: File = uploadcare.upload(f_up)
+    f_up.close()
+
+    try:
+        os.remove(file_name)
+    except:
+        pass
+
+    with open(f'{img_1.filename}', 'wb') as buffer:
+        shutil.copyfileobj(img_1.file, buffer)
+
+    file_name = img_1.filename
+
+    f_up = open(file_name, 'rb')
+    img_1_url: File = uploadcare.upload(f_up)
+    f_up.close()
+
+    try:
+        os.remove(file_name)
+    except:
+        pass
+
+    with open(f'{img_2.filename}', 'wb') as buffer:
+        shutil.copyfileobj(img_2.file, buffer)
+
+    file_name = img_2.filename
+
+    f_up = open(file_name, 'rb')
+    img_2_url: File = uploadcare.upload(f_up)
+    f_up.close()
+
+    try:
+        os.remove(file_name)
+    except:
+        pass
+
+    with open(f'{img_3.filename}', 'wb') as buffer:
+        shutil.copyfileobj(img_3.file, buffer)
+
+    file_name = img_3.filename
+
+    f_up = open(file_name, 'rb')
+    img_3_url: File = uploadcare.upload(f_up)
+    f_up.close()
+
+    try:
+        os.remove(file_name)
+    except:
+        pass
+
+    with open(f'{img_4.filename}', 'wb') as buffer:
+        shutil.copyfileobj(img_4.file, buffer)
+
+    file_name = img_4.filename
+
+    f_up = open(file_name, 'rb')
+    img_4_url: File = uploadcare.upload(f_up)
+    f_up.close()
+
+    try:
+        os.remove(file_name)
+    except:
+        pass
+
+    with open(f'{img_5.filename}', 'wb') as buffer:
+        shutil.copyfileobj(img_5.file, buffer)
+
+    file_name = img_5.filename
+
+    f_up = open(file_name, 'rb')
+    img_5_url: File = uploadcare.upload(f_up)
+    f_up.close()
+
+    try:
+        os.remove(file_name)
+    except:
+        pass
+
+
+    poi_data = {
+        "name" : name,
+        "description" : description,
+        "logo" : str(logo_url),
+        "title_image" : str(title_image_url),
+        "rating" : rating,
+        "img_1" : str(img_1_url),
+        "img_2" : str(img_2_url),
+        "img_3" : str(img_3_url),
+        "img_4" : str(img_4_url),
+        "img_5" : str(img_5_url),
+        "beach_id" : beach_id
+    }
+    
+    print("Till here")
+
+    supabase.table("poi").insert(poi_data).execute()
+
+    return {"response" : "success"}
