@@ -63,9 +63,10 @@ async def create_user(user : UserSchema):
         return {"response" : "A user with same email already exists"}
     else:
         data = supabase.table("users").insert(user.dict()).execute()
-        uid = ((data.dict())["data"])["id"]
+        print()
+        uid = ((((data.dict())["data"])[0])["id"])
         return {
-        "uid" : id,
+        "uid" : uid,
         "email" : user.email,
         "name" : user.first_name,
         "token" : sign_JWT(user.email)
