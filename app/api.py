@@ -6,14 +6,17 @@ import time
 import os
 import shutil
 from fastapi import FastAPI, Depends, Query, Body, UploadFile, File, Form
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 from typing import Optional
+
+from pyparsing import Char
 from app.models import PostSchema, UserLoginSchema, UserSchema
 from app.auth.auth_handler import sign_JWT
 from app.auth.auth_bearer import JWTBearer
 from supabase import create_client, Client
 from pyuploadcare import Uploadcare
 from fastapi.middleware.cors import CORSMiddleware
+from geopy.distance import geodesic
 
 
 app = FastAPI(
@@ -49,45 +52,41 @@ posts = [
 
 
 @app.get("/")
-async def read_items():
-    return {'msg': 'Hello'}
-
-
-@app.get('/posts')
-async def get_posts():
-    return {'data' : posts}
-
-
-@app.get('/posts/{id}')
-async def get_single_post(id:int):
-    if id > len(posts):
-        return {'error' : 'No post with supplied ID'}
-    else:
-        for post in posts:
-            if post["id"] == id:
-                return {'data' : post
-                }
-
-
-@app.post('/add_post', dependencies=[Depends(JWTBearer())])
-async def add_post(post:PostSchema):
-    post.id = len(posts) + 1
-    posts.append(post.dict())
-
-    return {'data' : 'post added'}
+async def root_endpoint():
+    return {'response': 'Bay App Developer API root endpoint'}
 
 
 @app.post('/user/signup')
 async def create_user(user : UserSchema):
     #users.append(user)
-    data = supabase.table("users").insert(user.dict()).execute()
-    return sign_JWT(user.email)
+    if check_existing_email(user):
+        return {"response" : "A user with same email already exists"}
+    else:
+        data = supabase.table("users").insert(user.dict()).execute()
+        uid = ((data.dict())["data"])["id"]
+        return {
+        "uid" : id,
+        "email" : user.email,
+        "name" : user.first_name,
+        "token" : sign_JWT(user.email)
+        }
 
 
 @app.post('/user/login')
 async def user_login(user : UserLoginSchema):
     if check_user(user):
-        return sign_JWT(user.email)
+        db_users = supabase.table("users").select("id, email, first_name").execute()
+        db_data = db_users.dict()
+        for data in db_data["data"]:
+            if data["email"] == user.email:
+                f_name = data["first_name"]
+                uid = data["id"]
+        return {
+        "uid" : uid,
+        "email" : user.email,
+        "name" : f_name,
+        "token" : sign_JWT(user.email)
+        }
     return {"error" : "Wrong credentials"}
 
 
@@ -101,6 +100,21 @@ def check_user(data : UserLoginSchema):
             if user["email"] == data.email:
                 if user["password"] == data.password:
                     return True
+        return False
+    
+    except:
+        return False
+
+
+def check_existing_email(data : UserLoginSchema):
+    
+    db_users = supabase.table("users").select("*").execute()
+
+    try:
+        users_dict = db_users.dict()
+        for user in users_dict["data"]:
+            if user["email"] == data.email:
+                return True
         return False
     
     except:
@@ -127,7 +141,7 @@ async def upload_file(file: UploadFile = File(...)):
     return {"file_url" : str(ucare_file)}
 
 
-@app.post('/report')
+@app.post('/report', dependencies=[Depends(JWTBearer())])
 async def issue_report(message: str = Form(...), image: UploadFile = File(...)):
     
     with open(f'{image.filename}', 'wb') as buffer:
@@ -254,9 +268,119 @@ async def add_poi(name: str = Form(...), description: str = Form(...), logo: Upl
         "img_5" : str(img_5_url),
         "beach_id" : beach_id
     }
-    
-    print("Till here")
 
     supabase.table("poi").insert(poi_data).execute()
 
     return {"response" : "success"}
+
+
+@app.get('/nearbypoi/{beach_id}', dependencies=[Depends(JWTBearer())])
+async def get_nearby_poi(beach_id:int):
+    try:
+        poi_data = supabase.table("poi").select("*").eq("beach_id",beach_id).execute()
+    except:
+        return {"response" : "Error occurred in DB Transaction"}
+    return poi_data 
+
+
+@app.get('/nearbybeach/{lat},{lon}', dependencies=[Depends(JWTBearer())])
+async def get_nearby_beach(lat:float, lon:float):
+
+    beach_data = ((supabase.table("beaches").select("id, name, lat, lon").execute()).dict())["data"]
+
+    distance_list = []
+
+    for data in beach_data:
+        beach_point = (data["lat"] , data["lon"])
+        user_point = (lat , lon)
+        distance = geodesic(beach_point, user_point).kilometers
+        distance_list.append(distance)
+    
+    nearby_beach_index = distance_list.index(min(distance_list))
+
+    return beach_data[nearby_beach_index]
+
+
+@app.post('/updatehelper/{email},{status}', dependencies=[Depends(JWTBearer())])
+async def update_helper_status(email:str, status:bool):
+
+    query_result = supabase.table("users").select("id, email").execute()
+    db_data = (query_result.dict())["data"]
+
+    print("parameter email: ", email)
+
+    for data in db_data:
+        print("db email: ",data["email"])
+        if str(data["email"]) == str(email):
+            id = int(data["id"])
+            try:
+                supabase.table("users").update({"helper":status}).eq("id",id).execute()
+            except:
+                return {"response" : "Error in DB Transaction"}
+
+            return {"response" : "Status updated successfully"}
+    
+    return {"response" : "Error in DB Transaction"}
+
+
+@app.post('/updatelocation/{uid},{email},{lat},{lon}', dependencies=[Depends(JWTBearer())])
+async def update_location_coordinates(uid:int, email:str, lat:float, lon:float):
+    
+    try:
+        data = supabase.table("live locations").select("*").eq("user_id",uid).execute()
+        db_dict = data.dict()
+        if len(db_dict["data"]) == 0:
+            try:
+                supabase.table("live locations").insert({"user_id":uid , "email":email , "lat":lat , "lon":lon}).execute()
+            except:
+                return {"response" : "Error in DB Transaction"}
+        else:
+            try:
+                supabase.table("live locations").update({"lat":lat , "lon":lon}).eq("user_id",uid).execute()
+            except:
+                return {"response" : "Error in DB Transaction"}
+    except:
+        return {"response" : "Error in DB Transaction"}
+    
+    return {"response" : "Updated"}
+
+
+@app.post('/sos/start/{uid},{lat},{lon}', dependencies=[Depends(JWTBearer())])
+async def start_sos(uid:int, lat:float, lon:float):
+    
+    try:
+        supabase.table("sos transaction record").insert({"init_id":uid}).execute()
+    except:
+        return {"response" : "Error in DB Transaction"}
+
+    try:
+        helper_data = supabase.table("users").select("id").eq("helper",True).execute()
+    except:
+        return {"response" : "Error occured in DB Transaction"}
+
+    try:
+        location_data = supabase.table("live locations").select("user_id, lat, lon").execute()
+    except:
+        return {"response" : "Error occured in DB transaction"}
+
+    helper_dict = (helper_data.dict())["data"]
+
+    location_dict = (location_data.dict())["data"]
+
+    distance_dict = {}
+
+    user_point = (lat, lon)
+
+    for helper in helper_dict:
+        for location_data in location_dict:
+            if helper["id"] == location_data["user_id"]:
+                helper_point = (location_data["lat"], location_data["lon"])
+                distance = geodesic(helper_point, user_point).kilometers
+                distance_dict[helper["id"]] = distance
+
+    print(distance_dict)
+
+
+@app.get('/help_needed/{uid}', dependencies=[Depends(JWTBearer())])
+async def help_needed():
+    pass
