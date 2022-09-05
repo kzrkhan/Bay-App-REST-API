@@ -122,36 +122,46 @@ def check_existing_email(data : UserLoginSchema):
         return False
 
 
-@app.post('/file')
-async def upload_file(file: UploadFile = File(...)):
+@app.post('/report', dependencies=[Depends(JWTBearer())])
+async def issue_report(issue: str = Form(...), media: UploadFile = File(...), reported_by: str = Form(...)):
     
-    with open(f'{file.filename}', 'wb') as buffer:
-        shutil.copyfileobj(file.file, buffer)
+    with open(f'{media.filename}', 'wb') as buffer:
+        shutil.copyfileobj(media.file, buffer)
 
-    file_name = file.filename
+    file_name = media.filename
 
     f_up = open(file_name, 'rb')
-    ucare_file: File = uploadcare.upload(f_up)
+    media_url: File = uploadcare.upload(f_up)
     f_up.close()
 
     try:
         os.remove(file_name)
     except:
         pass
-
-    return {"file_url" : str(ucare_file)}
-
-
-@app.post('/report', dependencies=[Depends(JWTBearer())])
-async def issue_report(message: str = Form(...), image: UploadFile = File(...)):
     
-    with open(f'{image.filename}', 'wb') as buffer:
-        shutil.copyfileobj(image.file, buffer)
+    report = {
+        "issue" : issue,
+        "media" : str(media_url),
+        "reported_by" : reported_by
+    }
 
-    print("File name: ",image.filename)
-    print("Message: ", message)
-
+    try:
+        supabase.table("reports").insert(report).execute()
+    except:
+        return {"response" : "Error in DB Transaction"}
+    
     return {"response" : "success"}
+
+
+@app.get('/getreports', dependencies=[Depends(JWTBearer())])
+async def get_reports():
+    
+    try:
+        report_data = supabase.table("reports").select("*").execute()
+    except:
+        return {"response" : "Error in DB Transaction"}
+    
+    return report_data
 
 
 @app.post('/addpoi')
@@ -324,7 +334,7 @@ async def update_helper_status(email:str, status:bool):
     return {"response" : "Error in DB Transaction"}
 
 
-@app.post('/updatelocation/{uid},{email},{lat},{lon}', dependencies=[Depends(JWTBearer())])
+@app.post('/updatelocation/{uid},{email},{lat},{lon}')
 async def update_location_coordinates(uid:int, email:str, lat:float, lon:float):
     
     try:
