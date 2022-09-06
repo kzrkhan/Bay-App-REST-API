@@ -122,7 +122,7 @@ def check_existing_email(data : UserLoginSchema):
         return False
 
 
-@app.post('/report')
+@app.post('/report', dependencies=[Depends(JWTBearer())])
 async def issue_report(issue: str = Form(...), media: UploadFile = File(...), reported_by: str = Form(...)):
     
     with open(f'{media.filename}', 'wb') as buffer:
