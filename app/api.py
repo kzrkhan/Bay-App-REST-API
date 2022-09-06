@@ -122,7 +122,7 @@ def check_existing_email(data : UserLoginSchema):
         return False
 
 
-@app.post('/report', dependencies=[Depends(JWTBearer())])
+@app.post('/report')
 async def issue_report(issue: str = Form(...), media: UploadFile = File(...), reported_by: str = Form(...)):
     
     with open(f'{media.filename}', 'wb') as buffer:
@@ -360,7 +360,7 @@ async def update_location_coordinates(uid:int, email:str, lat:float, lon:float):
 async def start_sos(uid:int, lat:float, lon:float):
     
     try:
-        supabase.table("sos transaction record").insert({"init_id":uid}).execute()
+        insertion_response = supabase.table("sos transaction record").insert({"init_id":uid}).execute()
     except:
         return {"response" : "Error in DB Transaction"}
 
@@ -389,7 +389,35 @@ async def start_sos(uid:int, lat:float, lon:float):
                 distance = geodesic(helper_point, user_point).kilometers
                 distance_dict[helper["id"]] = distance
 
-    print(distance_dict)
+    '''lowest_distance = 10000
+    target_id = 0
+    for id in distance_dict.keys():
+        if distance_dict[id] < lowest_distance:
+            lowest_distance = distance_dict[id]
+            target_id = id
+    
+    distance_sorted = sorted(distance_dict.items(), key=lambda kv:
+                 (kv[1], kv[0]))
+
+
+    sos_transaction_id = (((insertion_response.dict())["data"])[0])["id"]
+    
+    try:
+        responder_update_response = supabase.table("sos transaction record").update({"resp_id":target_id}).eq("id",sos_transaction_id).execute()
+    except:
+        return {"response" : "Error in DB Transaction"}
+
+    responder_data = ((((supabase.table("users").select("first_name","last_name").eq("id",target_id).execute()).dict())["data"])[0])
+
+    responder_eta = (60.0*lowest_distance)/4.0
+
+    api_response = {
+        "first_name" : responder_data["first_name"],
+        "last_name" : responder_data["last_name"],
+
+    }
+
+    print(api_response)'''
 
 
 @app.get('/help_needed/{uid}', dependencies=[Depends(JWTBearer())])
