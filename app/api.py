@@ -389,15 +389,15 @@ async def start_sos(uid:int, lat:float, lon:float):
                 distance = geodesic(helper_point, user_point).kilometers
                 distance_dict[helper["id"]] = distance
 
-    '''lowest_distance = 10000
+    lowest_distance = 10000
     target_id = 0
     for id in distance_dict.keys():
         if distance_dict[id] < lowest_distance:
             lowest_distance = distance_dict[id]
             target_id = id
     
-    distance_sorted = sorted(distance_dict.items(), key=lambda kv:
-                 (kv[1], kv[0]))
+    #distance_sorted = sorted(distance_dict.items(), key=lambda kv:
+     #            (kv[1], kv[0]))
 
 
     sos_transaction_id = (((insertion_response.dict())["data"])[0])["id"]
@@ -411,15 +411,18 @@ async def start_sos(uid:int, lat:float, lon:float):
 
     responder_eta = (60.0*lowest_distance)/4.0
 
+    responder_eta_str = str(int(responder_eta)) + " minutes"
+
     api_response = {
         "first_name" : responder_data["first_name"],
         "last_name" : responder_data["last_name"],
-
+        "eta" : responder_eta_str
     }
 
-    print(api_response)'''
+    return api_response
 
 
-@app.get('/help_needed/{uid}', dependencies=[Depends(JWTBearer())])
-async def help_needed():
+@app.get('/helper_ready/{uid}', dependencies=[Depends(JWTBearer())])
+async def ready_to_help(uid:int):
+    
     pass
