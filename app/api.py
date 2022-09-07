@@ -383,11 +383,14 @@ async def start_sos(uid:int, lat:float, lon:float):
     user_point = (lat, lon)
 
     for helper in helper_dict:
-        for location_data in location_dict:
-            if helper["id"] == location_data["user_id"]:
-                helper_point = (location_data["lat"], location_data["lon"])
-                distance = geodesic(helper_point, user_point).kilometers
-                distance_dict[helper["id"]] = distance
+        if helper["id"] == uid:
+            pass
+        else:
+            for location_data in location_dict:
+                if helper["id"] == location_data["user_id"]:
+                    helper_point = (location_data["lat"], location_data["lon"])
+                    distance = geodesic(helper_point, user_point).kilometers
+                    distance_dict[helper["id"]] = distance
 
     lowest_distance = 10000
     target_id = 0
@@ -425,4 +428,57 @@ async def start_sos(uid:int, lat:float, lon:float):
 @app.get('/helper_ready/{uid}', dependencies=[Depends(JWTBearer())])
 async def ready_to_help(uid:int):
     
-    pass
+    try:
+        db_response = ((supabase.table("sos transaction record").select("*").eq("status","pending").execute()).dict())["data"]
+    except:
+        return {"response" : "Error in DB Transaction"}
+
+    if len(db_response) != 0:
+        for entry in db_response:
+            if entry["resp_id"] == uid:
+                init_location = supabase.table("live locations").select("lat" , "lon").eq("user_id",entry["init_id"]).execute()
+                init_location_parsed = ((init_location.dict())["data"])[0]
+
+                init_db_response = supabase.table("users").select("first_name" , "last_name").eq("id",entry["init_id"]).execute()
+                init_db_response_parsed = ((init_db_response.dict())["data"])[0]
+
+                api_response = {
+                    "first_name" : init_db_response_parsed["first_name"],
+                    "last_name" : init_db_response_parsed["last_name"],
+                    "lat" : init_location_parsed["lat"],
+                    "lon" : init_location_parsed["lon"]
+                }
+
+                try:
+                    supabase.table("sos transaction record").update({"status":"in progress"}).eq("id",entry["id"]).execute()
+                except:
+                    return {"response" : "Error in DB Transaction"}
+
+                return api_response
+            else:
+                return {"response" : "help not needed"}
+    else:
+        return {"response" : "help not needed"}
+
+
+@app.post('/end_sos/{uid}', dependencies=[Depends(JWTBearer())])
+async def finish_sos(uid:int):
+
+    try:
+        db_response = ((supabase.table("sos transaction record").select("*").eq("status","in progress").execute()).dict())["data"]
+    except:
+        return {"response" : "Error in DB Transaction"}
+
+    if len(db_response) != 0:
+        for entry in db_response:
+            if entry["init_id"] == uid:
+
+                try:
+                    supabase.table("sos transaction record").update({"status":"completed"}).eq("id",entry["id"]).execute()
+                except:
+                    return {"response" : "Error in DB Transaction"}
+
+                return {"response" : "SOS completed"}
+
+    else:
+        return {"response" : "No SOS available to mark complete"}
